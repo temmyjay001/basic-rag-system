@@ -1,66 +1,187 @@
-import { DurableObject } from "cloudflare:workers";
+import { Document, RAGRequest, RAGResponse } from './interfaces';
+import { DocumentProcessor } from './documentProcessor';
+import { VectorStore } from './vectorStore';
+import { RAGGenerator } from './ragGenerator';
 
-/**
- * Welcome to Cloudflare Workers! This is your first Durable Objects application.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your Durable Object in action
- * - Run `npm run deploy` to publish your application
- *
- * Bind resources to your worker in `wrangler.jsonc`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/durable-objects
- */
-
-/** A Durable Object's behavior is defined in an exported Javascript class */
-export class MyDurableObject extends DurableObject<Env> {
-	/**
-	 * The constructor is invoked once upon creation of the Durable Object, i.e. the first call to
-	 * 	`DurableObjectStub::get` for a given identifier (no-op constructors can be omitted)
-	 *
-	 * @param ctx - The interface for interacting with Durable Object state
-	 * @param env - The interface to reference bindings declared in wrangler.jsonc
-	 */
-	constructor(ctx: DurableObjectState, env: Env) {
-		super(ctx, env);
-	}
-
-	/**
-	 * The Durable Object exposes an RPC method sayHello which will be invoked when when a Durable
-	 *  Object instance receives a request from a Worker via the same method invocation on the stub
-	 *
-	 * @param name - The name provided to a Durable Object instance from a Worker
-	 * @returns The greeting to be sent back to the Worker
-	 */
-	async sayHello(name: string): Promise<string> {
-		return `Hello, ${name}!`;
-	}
+interface Env {
+	AI: Ai;
+	DOCUMENTS_INDEX: VectorizeIndex;
 }
 
 export default {
-	/**
-	 * This is the standard fetch handler for a Cloudflare Worker
-	 *
-	 * @param request - The request submitted to the Worker from the client
-	 * @param env - The interface to reference bindings declared in wrangler.jsonc
-	 * @param ctx - The execution context of the Worker
-	 * @returns The response to be sent back to the client
-	 */
-	async fetch(request, env, ctx): Promise<Response> {
-		// Create a `DurableObjectId` for an instance of the `MyDurableObject`
-		// class named "foo". Requests from all Workers to the instance named
-		// "foo" will go to a single globally unique Durable Object instance.
-		const id: DurableObjectId = env.MY_DURABLE_OBJECT.idFromName("foo");
+	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+		// Initialize our components
+		const documentProcessor = new DocumentProcessor(env.AI);
+		const vectorStore = new VectorStore(env.DOCUMENTS_INDEX, env.AI);
+		const ragGenerator = new RAGGenerator(env.AI);
 
-		// Create a stub to open a communication channel with the Durable
-		// Object instance.
-		const stub = env.MY_DURABLE_OBJECT.get(id);
+		// Handle different routes
+		const url = new URL(request.url);
+		const path = url.pathname;
 
-		// Call the `sayHello()` RPC method on the stub to invoke the method on
-		// the remote Durable Object instance
-		const greeting = await stub.sayHello("world");
+		// CORS headers
+		const corsHeaders = {
+			'Access-Control-Allow-Origin': '*',
+			'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+			'Access-Control-Allow-Headers': 'Content-Type',
+		};
 
-		return new Response(greeting);
+		// Handle CORS preflight requests
+		if (request.method === 'OPTIONS') {
+			return new Response(null, {
+				headers: corsHeaders,
+			});
+		}
+
+		try {
+			// Route for ingesting documents
+			if (path === '/api/ingest' && request.method === 'POST') {
+				const data = (await request.json()) as Document[];
+
+				// Process each document: chunk and embed
+				for (const document of data) {
+					// Step 1: Chunk the document
+					const chunks = documentProcessor.chunkDocument(document);
+
+					// Step 2: Generate embeddings
+					const embeddedChunks = await documentProcessor.generateEmbeddings(chunks);
+
+					// Step 3: Store in vector database
+					await vectorStore.storeChunks(embeddedChunks);
+				}
+
+				return new Response(
+					JSON.stringify({
+						success: true,
+						message: `Processed ${data.length} documents`,
+					}),
+					{
+						headers: {
+							'Content-Type': 'application/json',
+							...corsHeaders,
+						},
+					}
+				);
+			}
+
+			// Route for RAG queries
+			if (path === '/api/query' && request.method === 'POST') {
+				const { query, topK = 3 } = (await request.json()) as RAGRequest;
+
+				// Step 1: Retrieve relevant chunks
+				const retrievedChunks = await vectorStore.queryChunks(query, topK);
+
+				// Step 2: Generate response
+				const answer = await ragGenerator.generateResponse(query, retrievedChunks);
+
+				// Prepare and return response
+				const response: RAGResponse = {
+					query,
+					answer,
+					sourceChunks: retrievedChunks,
+				};
+
+				return new Response(JSON.stringify(response), {
+					headers: {
+						'Content-Type': 'application/json',
+						...corsHeaders,
+					},
+				});
+			}
+
+			// Default route - show simple HTML interface
+			return new Response(
+				`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>RAG System</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+              body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+              .panel { border: 1px solid #ddd; padding: 20px; margin-bottom: 20px; border-radius: 5px; }
+              textarea, input, button { width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; }
+              button { background: #0070f3; color: white; border: none; border-radius: 5px; cursor: pointer; }
+              pre { background: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; }
+            </style>
+          </head>
+          <body>
+            <h1>RAG System Demo</h1>
+            
+            <div class="panel">
+              <h2>Ingest Documents</h2>
+              <textarea id="documents" rows="10" placeholder='[{"id": "doc1", "title": "Example", "content": "This is an example document."}]'></textarea>
+              <button id="ingestBtn">Ingest Documents</button>
+              <pre id="ingestResult"></pre>
+            </div>
+            
+            <div class="panel">
+              <h2>Query</h2>
+              <input id="query" type="text" placeholder="Enter your question here...">
+              <button id="queryBtn">Ask Question</button>
+              <div id="answer"></div>
+              <h3>Sources:</h3>
+              <div id="sources"></div>
+            </div>
+            
+            <script>
+              document.getElementById('ingestBtn').addEventListener('click', async () => {
+			  console.log('Ingesting documents...', {document: document.getElementById('documents').value});
+                const documents = JSON.parse(document.getElementById('documents').value);
+                const response = await fetch('/api/ingest', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(documents)
+                });
+                const result = await response.json();
+                document.getElementById('ingestResult').textContent = JSON.stringify(result, null, 2);
+              });
+              
+              document.getElementById('queryBtn').addEventListener('click', async () => {
+                const query = document.getElementById('query').value;
+                const response = await fetch('/api/query', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ query })
+                });
+                const result = await response.json();
+                document.getElementById('answer').innerHTML = '<p><strong>Answer:</strong></p><p>' + result.answer + '</p>';
+                
+                const sourcesHtml = result.sourceChunks.map((source, i) => 
+                  \`<div style="margin-bottom: 10px; padding: 10px; background: #f9f9f9; border-radius: 5px;">
+                    <p><strong>Source \${i+1}</strong> (Score: \${source.score.toFixed(2)})</p>
+                    <p>\${source.chunk.metadata.title}</p>
+                    <p>\${source.chunk.content}</p>
+                  </div>\`
+                ).join('');
+                document.getElementById('sources').innerHTML = sourcesHtml;
+              });
+            </script>
+          </body>
+        </html>
+      `,
+				{
+					headers: {
+						'Content-Type': 'text/html',
+						...corsHeaders,
+					},
+				}
+			);
+		} catch (error: any) {
+			return new Response(
+				JSON.stringify({
+					success: false,
+					error: error.message,
+				}),
+				{
+					status: 500,
+					headers: {
+						'Content-Type': 'application/json',
+						...corsHeaders,
+					},
+				}
+			);
+		}
 	},
-} satisfies ExportedHandler<Env>;
+};
