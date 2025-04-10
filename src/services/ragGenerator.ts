@@ -1,4 +1,4 @@
-import { RetrievedChunk } from './interfaces';
+import { RetrievedChunk } from '../interfaces';
 
 export class RAGGenerator {
 	private readonly ai: Ai;

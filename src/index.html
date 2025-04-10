@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>PDF RAG System</title>
+		<style>
+			:root {
+				--primary: #0070f3;
+				--primary-dark: #0051a8;
+				--gray-light: #f5f5f5;
+				--gray: #e0e0e0;
+				--gray-dark: #666;
+				--bg-color: #fff;
+				--text-color: #333;
+				--font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue',
+					sans-serif;
+			}
+
+			* {
+				box-sizing: border-box;
+				margin: 0;
+				padding: 0;
+			}
+
+			body {
+				font-family: var(--font-sans);
+				line-height: 1.6;
+				color: var(--text-color);
+				background-color: var(--bg-color);
+				padding: 0;
+				margin: 0;
+			}
+
+			header {
+				background-color: var(--primary);
+				color: white;
+				padding: 1rem;
+				text-align: center;
+			}
+
+			.container {
+				max-width: 1000px;
+				margin: 0 auto;
+				padding: 20px;
+			}
+
+			.panel {
+				background-color: white;
+				border-radius: 8px;
+				box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+				padding: 20px;
+				margin-bottom: 20px;
+			}
+
+			h1,
+			h2,
+			h3 {
+				margin-bottom: 1rem;
+			}
+
+			h1 {
+				font-size: 2rem;
+			}
+
+			h2 {
+				font-size: 1.5rem;
+				color: var(--primary);
+			}
+
+			h3 {
+				font-size: 1.2rem;
+				margin-top: 1.5rem;
+			}
+
+			.file-drop {
+				border: 2px dashed var(--gray);
+				padding: 30px;
+				text-align: center;
+				border-radius: 8px;
+				margin-bottom: 15px;
+				transition: all 0.3s;
+				cursor: pointer;
+			}
+
+			.file-drop:hover {
+				border-color: var(--primary);
+				background-color: rgba(0, 112, 243, 0.05);
+			}
+
+			.file-drop.active {
+				border-color: var(--primary);
+				background-color: rgba(0, 112, 243, 0.1);
+			}
+
+			.flex {
+				display: flex;
+				gap: 10px;
+				align-items: center;
+			}
+
+			.grow {
+				flex-grow: 1;
+			}
+
+			input[type='text'] {
+				width: 100%;
+				padding: 12px;
+				border: 1px solid var(--gray);
+				border-radius: 4px;
+				font-size: 1rem;
+			}
+
+			input[type='text']:focus {
+				outline: none;
+				border-color: var(--primary);
+				box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.2);
+			}
+
+			button {
+				background-color: var(--primary);
+				color: white;
+				border: none;
+				border-radius: 4px;
+				padding: 10px 20px;
+				font-size: 1rem;
+				cursor: pointer;
+				transition: background-color 0.3s;
+			}
+
+			button:hover {
+				background-color: var(--primary-dark);
+			}
+
+			button:disabled {
+				background-color: var(--gray);
+				cursor: not-allowed;
+			}
+
+			.progress {
+				display: none;
+				width: 100%;
+				height: 10px;
+				background-color: var(--gray-light);
+				border-radius: 5px;
+				margin: 15px 0;
+				overflow: hidden;
+			}
+
+			.progress-bar {
+				width: 0%;
+				height: 100%;
+				background-color: var(--primary);
+				transition: width 0.3s;
+			}
+
+			.hidden {
+				display: none;
+			}
+
+			pre {
+				background-color: var(--gray-light);
+				padding: 15px;
+				border-radius: 4px;
+				overflow-x: auto;
+				font-size: 0.9rem;
+			}
+
+			.source-item {
+				margin-bottom: 15px;
+				padding: 15px;
+				background-color: var(--gray-light);
+				border-radius: 5px;
+				border-left: 4px solid var(--primary);
+			}
+
+			.answer-box {
+				background-color: #f8f9fa;
+				padding: 20px;
+				border-radius: 8px;
+				box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+				margin-bottom: 20px;
+			}
+
+			.status {
+				font-size: 0.9rem;
+				color: var(--gray-dark);
+				margin-bottom: 10px;
+			}
+
+			footer {
+				text-align: center;
+				padding: 20px;
+				margin-top: 40px;
+				border-top: 1px solid var(--gray);
+				color: var(--gray-dark);
+			}
+
+			.loader {
+				display: inline-block;
+				width: 20px;
+				height: 20px;
+				border: 3px solid rgba(0, 112, 243, 0.3);
+				border-radius: 50%;
+				border-top-color: var(--primary);
+				animation: spin 1s ease-in-out infinite;
+				margin-right: 10px;
+			}
+
+			@keyframes spin {
+				to {
+					transform: rotate(360deg);
+				}
+			}
+
+			.tab-container {
+				margin-bottom: 20px;
+			}
+
+			.tabs {
+				display: flex;
+				border-bottom: 1px solid var(--gray);
+			}
+
+			.tab {
+				padding: 10px 20px;
+				cursor: pointer;
+				border-bottom: 2px solid transparent;
+				margin-right: 10px;
+			}
+
+			.tab.active {
+				border-bottom: 2px solid var(--primary);
+				color: var(--primary);
+				font-weight: 500;
+			}
+
+			.tab-content {
+				display: none;
+				padding: 20px 0;
+			}
+
+			.tab-content.active {
+				display: block;
+			}
+
+			/* Responsive styles */
+			@media (max-width: 768px) {
+				.container {
+					padding: 10px;
+				}
+
+				.flex {
+					flex-direction: column;
+					align-items: stretch;
+				}
+
+				button {
+					width: 100%;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<header>
+			<h1>PDF RAG System</h1>
+		</header>
+
+		<div class="container">
+			<div class="tab-container">
+				<div class="tabs">
+					<div class="tab active" data-tab="upload">Upload PDF</div>
+					<div class="tab" data-tab="query">Ask Questions</div>
+					<div class="tab" data-tab="about">About</div>
+				</div>
+
+				<div class="tab-content active" id="upload-tab">
+					<div class="panel">
+						<h2>Upload PDF Document</h2>
+						<div class="file-drop" id="fileDrop">
+							<p>Drag & drop your PDF file here or click to browse</p>
+							<input type="file" id="fileInput" accept=".pdf" style="display: none" />
+						</div>
+						<div class="flex">
+							<span id="fileName" class="grow"></span>
+							<button id="uploadBtn" disabled>Upload</button>
+						</div>
+						<div class="progress" id="uploadProgress">
+							<div class="progress-bar" id="progressBar"></div>
+						</div>
+						<div id="uploadResult" class="hidden">
+							<h3>Upload Result:</h3>
+							<pre id="resultText"></pre>
+						</div>
+					</div>
+				</div>
+
+				<div class="tab-content" id="query-tab">
+					<div class="panel">
+						<h2>Ask Questions About Your Documents</h2>
+						<div class="flex">
+							<input id="query" type="text" placeholder="Enter your question here..." class="grow" />
+							<button id="queryBtn">Ask</button>
+						</div>
+						<div id="answerSection" class="hidden">
+							<h3>Answer:</h3>
+							<div id="answer" class="answer-box"></div>
+							<h3>Sources:</h3>
+							<div id="sources"></div>
+						</div>
+					</div>
+				</div>
+
+				<div class="tab-content" id="about-tab">
+					<div class="panel">
+						<h2>About This RAG System</h2>
+						<p>This PDF RAG (Retrieval-Augmented Generation) system allows you to:</p>
+						<ul style="margin-left: 20px; margin-bottom: 15px">
+							<li>Upload PDF documents</li>
+							<li>Extract and process text content</li>
+							<li>Ask questions about your documents</li>
+							<li>Get AI-generated answers based on document content</li>
+						</ul>
+						<p>The system works by:</p>
+						<ol style="margin-left: 20px; margin-bottom: 15px">
+							<li>Extracting text from your PDF documents</li>
+							<li>Breaking the text into manageable chunks</li>
+							<li>Creating vector embeddings for each chunk</li>
+							<li>Finding relevant chunks when you ask a question</li>
+							<li>Using an AI model to generate answers from the most relevant content</li>
+						</ol>
+						<p>This provides more accurate and contextual answers than using a generic AI model alone.</p>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<footer>
+			<p>PDF RAG System powered by Cloudflare Workers, Vectorize, and Workers AI</p>
+		</footer>
+
+		<script>
+			// Tab handling
+			document.querySelectorAll('.tab').forEach((tab) => {
+				tab.addEventListener('click', () => {
+					document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
+					document.querySelectorAll('.tab-content').forEach((c) => c.classList.remove('active'));
+
+					tab.classList.add('active');
+					document.getElementById(tab.dataset.tab + '-tab').classList.add('active');
+				});
+			});
+
+			// File handling
+			const fileDrop = document.getElementById('fileDrop');
+			const fileInput = document.getElementById('fileInput');
+			const fileName = document.getElementById('fileName');
+			const uploadBtn = document.getElementById('uploadBtn');
+			const uploadProgress = document.getElementById('uploadProgress');
+			const progressBar = document.getElementById('progressBar');
+			const uploadResult = document.getElementById('uploadResult');
+			const resultText = document.getElementById('resultText');
+
+			// Handle drag and drop events
+			['dragenter', 'dragover', 'dragleave', 'drop'].forEach((eventName) => {
+				fileDrop.addEventListener(eventName, preventDefaults, false);
+			});
+
+			function preventDefaults(e) {
+				e.preventDefault();
+				e.stopPropagation();
+			}
+
+			['dragenter', 'dragover'].forEach((eventName) => {
+				fileDrop.addEventListener(eventName, () => {
+					fileDrop.classList.add('active');
+				});
+			});
+
+			['dragleave', 'drop'].forEach((eventName) => {
+				fileDrop.addEventListener(eventName, () => {
+					fileDrop.classList.remove('active');
+				});
+			});
+
+			fileDrop.addEventListener('drop', handleDrop);
+			fileDrop.addEventListener('click', () => fileInput.click());
+			fileInput.addEventListener('change', handleFileSelect);
+
+			function handleDrop(e) {
+				const dt = e.dataTransfer;
+				const files = dt.files;
+				if (files.length) {
+					handleFiles(files);
+				}
+			}
+
+			function handleFileSelect(e) {
+				const files = e.target.files;
+				handleFiles(files);
+			}
+
+			function handleFiles(files) {
+				if (files.length === 0) return;
+
+				const file = files[0];
+				if (!file.name.toLowerCase().endsWith('.pdf')) {
+					alert('Please select a PDF file');
+					return;
+				}
+
+				fileName.textContent = file.name;
+				uploadBtn.disabled = false;
+				fileInput.files = files; // Update the file input
+			}
+
+			// Upload PDF
+			uploadBtn.addEventListener('click', async () => {
+				if (!fileInput.files.length) return;
+
+				const file = fileInput.files[0];
+				const formData = new FormData();
+				formData.append('file', file);
+
+				uploadBtn.disabled = true;
+				uploadProgress.style.display = 'block';
+
+				try {
+					const xhr = new XMLHttpRequest();
+					xhr.open('POST', '/api/ingest-pdf', true);
+
+					xhr.upload.onprogress = (e) => {
+						if (e.lengthComputable) {
+							const percentComplete = (e.loaded / e.total) * 100;
+							progressBar.style.width = percentComplete + '%';
+						}
+					};
+
+					xhr.onload = function () {
+						if (xhr.status === 200) {
+							const result = JSON.parse(xhr.responseText);
+							uploadResult.classList.remove('hidden');
+							resultText.textContent = JSON.stringify(result, null, 2);
+
+							// Auto switch to query tab
+							setTimeout(() => {
+								document.querySelector('.tab[data-tab="query"]').click();
+							}, 1000);
+						} else {
+							alert('Upload failed: ' + xhr.statusText);
+						}
+
+						uploadBtn.disabled = false;
+						setTimeout(() => {
+							uploadProgress.style.display = 'none';
+							progressBar.style.width = '0%';
+						}, 1000);
+					};
+
+					xhr.onerror = function () {
+						alert('Upload failed. Please try again.');
+						uploadBtn.disabled = false;
+						uploadProgress.style.display = 'none';
+					};
+
+					xhr.send(formData);
+				} catch (error) {
+					alert('Error: ' + error.message);
+					uploadBtn.disabled = false;
+					uploadProgress.style.display = 'none';
+				}
+			});
+
+			// Query handling
+			const queryInput = document.getElementById('query');
+			const queryBtn = document.getElementById('queryBtn');
+			const answerSection = document.getElementById('answerSection');
+			const answerElement = document.getElementById('answer');
+			const sourcesElement = document.getElementById('sources');
+
+			queryBtn.addEventListener('click', async () => {
+				const query = queryInput.value.trim();
+				if (!query) return;
+
+				queryBtn.disabled = true;
+				const originalBtnText = queryBtn.textContent;
+				queryBtn.innerHTML = '<div class="loader"></div> Searching...';
+
+				try {
+					const response = await fetch('/api/query', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ query }),
+					});
+
+					const result = await response.json();
+
+					// Display answer
+					answerSection.classList.remove('hidden');
+					answerElement.innerHTML = '<p>' + result.answer.replace(/\n/g, '<br>') + '</p>';
+
+					// Display sources
+					const sourcesHtml = result.sourceChunks
+						.map(
+							(source, i) =>
+								`<div class="source-item">
+			        <p><strong>Source ${i+1}</strong> (Relevance: ${(source.score * 100).toFixed(1)}%)</p>
+			        <p><em>${source.chunk.metadata.title}</em></p>
+			        <p>${source.chunk.content.substring(0, 200)}${source.chunk.content.length > 200 ? '...' : ''}</p>
+			      </div>`
+						)
+						.join('');
+
+					sourcesElement.innerHTML = sourcesHtml || '<p>No relevant sources found.</p>';
+				} catch (error) {
+					alert('Error: ' + error.message);
+				} finally {
+					queryBtn.disabled = false;
+					queryBtn.innerHTML = originalBtnText;
+				}
+			});
+
+			// Also trigger search on Enter key
+			queryInput.addEventListener('keypress', (e) => {
+				if (e.key === 'Enter' && !queryBtn.disabled) {
+					queryBtn.click();
+				}
+			});
+		</script>
+	</body>
+</html>

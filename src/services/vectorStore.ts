@@ -1,4 +1,4 @@
-import { DocumentChunk, EmbeddedChunk, RetrievedChunk } from './interfaces';
+import { EmbeddedChunk, RetrievedChunk } from '../interfaces';
 
 export class VectorStore {
 	private readonly vectorize: VectorizeIndex;
@@ -65,5 +65,23 @@ export class VectorStore {
 			},
 			score: match.score,
 		}));
+	}
+
+	/**
+	 * Get statistics about the stored vectors
+	 */
+	public async getStats(): Promise<{ vectorCount: number }> {
+		try {
+			// This is a hypothetical approach, as Vectorize might not have a direct way to get counts
+			// You would need to implement this based on Vectorize's actual API
+			const stats = {
+				vectorCount: 0, // Placeholder
+			};
+
+			return stats;
+		} catch (error) {
+			console.error('Error getting vector stats:', error);
+			return { vectorCount: 0 };
+		}
 	}
 }

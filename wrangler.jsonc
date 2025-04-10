@@ -14,7 +14,7 @@
 		"binding": "AI",
 	},
 	"vectorize": [
-		{"binding": "DOCUMENTS_INDEX", "index_name": "documents-index"}
+		{"binding": "DOCUMENTS_INDEX", "index_name": "pdf-documents-index"}
 	]
 	/**
 	 * Smart Placement
